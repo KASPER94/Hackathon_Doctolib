@@ -1,0 +1,8 @@
+streamlit
+fastapi
+uvicorn
+requests
+websockets
+opencv-python
+numpy
+mediapipe
