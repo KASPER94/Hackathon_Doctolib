@@ -59,6 +59,7 @@ services:
       - "3000:80"
     environment:
       - VITE_API_URL=http://backend:8000
+      - CHOKIDAR_USEPOLLING=true
     depends_on:
       - fastapi 
     env_file:
