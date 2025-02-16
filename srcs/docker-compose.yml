@@ -37,6 +37,7 @@ services:
       - postgres
     volumes:
       - ./backend/app:/app/
+      - ./uploads:/app/uploads
       - /run/user/1000/pulse:/run/user/1000/pulse
       - ~/.config/pulse/cookie:/root/.config/pulse/cookie
       - /etc/pulse:/etc/pulse
