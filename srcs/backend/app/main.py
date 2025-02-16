@@ -43,8 +43,25 @@ pose = mp_pose.Pose()
 async def video_feed(websocket: WebSocket):
     await websocket.accept()
     cap = cv2.VideoCapture(0)
-    frames_data = []
-    prev_landmark = None 
+    
+    squats_list = []  # Liste de tous les squats détectés
+    current_squat = []  # Liste temporaire pour stocker un squat en cours
+    temp_squat = []
+    mouv_complet = []
+
+    # Détection de l'orientation
+    width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+    height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    
+    squatTrigger = 150 if height > width else 170
+    tolerance = 5  # Tolérance de 5 degrés
+    trigger_start = squatTrigger - tolerance
+
+    print(f"Sélection du trigger à {squatTrigger}° avec une tolérance de {tolerance}°")
+
+    in_squat = False  # Indicateur si un squat est en cours
+    squat_validated = False  # Vérifie qu'on a atteint la position basse
+    prev_landmark = None
     with open("gt.json", "r") as f:
         gt = json.load(f)
     try:    
@@ -62,6 +79,42 @@ async def video_feed(websocket: WebSocket):
             if not ret:
                 break
 
+            ret, frame = cap.read()
+        
+            # Convertir l'image en RGB
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            
+            # Détection des points clés
+            results = pose.process(frame_rgb)
+            data, prev_landmark = new_extract_squat_data(results, prev_landmark, 0.05) 
+            if "left_knee" in data and "right_knee" in data:
+                left_knee_angle = data["left_knee"]
+                right_knee_angle = data["right_knee"]
+                back_angle = data["back_angle"]
+                # Détection du début du squat (zone de tolérance)
+                if not in_squat and (left_knee_angle + right_knee_angle)/2 < trigger_start and back_angle < trigger_start:
+                    in_squat = True
+                    squat_validated = False  # On attend encore de confirmer le squat
+                    current_squat = []  # Nouvelle liste pour stocker le squat en cours
+                    print("Détection en approche du squat")
+                # Validation du squat (descente sous squatTrigger)
+                if in_squat and not squat_validated and (left_knee_angle + right_knee_angle)/2 < squatTrigger and back_angle < squatTrigger:
+                    squat_validated = True
+                    print("Squat validé, enregistrement des frames")
+                # Ajout des frames au squat en cours si validé
+                if squat_validated:
+                    current_squat.append(data)
+                    mouv_complet.append(data)
+                # Détection de la fin d’un squat (remontée au-dessus du trigger)
+                if in_squat and squat_validated and (left_knee_angle + right_knee_angle)/2 >= squatTrigger and back_angle >=squatTrigger:
+                    in_squat = False
+                    squat_validated = False
+                    if len(current_squat) > 0:
+                        await llm(current_squat, gt, websocket=websocket)
+                        squats_list.append(current_squat)
+                        print(f"Squat terminé, {len(current_squat)} frames enregistrées")
+         
+
             # rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             # results = pose.process(rgb_frame)
             # squat_data = extract_squat_data(results)
@@ -70,29 +123,19 @@ async def video_feed(websocket: WebSocket):
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             
             # Détection des points clés de la frame en cours
-            cur_landmark = pose.process(frame_rgb)
+            cur_landmark = results
 
-            # Calcul des angles uniquement s'il y a un mouvement détecté
-            angles, prev_landmark = new_extract_squat_data(cur_landmark, prev_landmark, 0.1)
-            if len(angles)>0: # Vérifier si des angles ont été calculés
-                frames_data.append(angles)
-            
-            # Envoi au LLM toutes les X frames (éviter trop d'appels inutiles)
-            if len(frames_data) >= 30:
-                await llm(frames_data, gt, websocket=websocket)
-                frames_data.clear()  # Réinitialiser après envoi
-            
             if cur_landmark.pose_landmarks:
                 mp.solutions.drawing_utils.draw_landmarks(
                     frame, cur_landmark.pose_landmarks, mp_pose.POSE_CONNECTIONS
                 )
 
-            if len(angles)>0:
-                cv2.putText(frame, f"Gauche: {angles.get('left_knee', 0):.2f}", 
+            if len(data)>0:
+                cv2.putText(frame, f"Gauche: {data.get('left_knee', 0):.2f}", 
                                 (50, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-                cv2.putText(frame, f"Droite: {angles.get('right_knee', 0):.2f}", 
+                cv2.putText(frame, f"Droite: {data.get('right_knee', 0):.2f}", 
                                 (50, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 255, 0), 2)
-                cv2.putText(frame, f"Dos: {angles.get('back_angle', 0):.2f}", 
+                cv2.putText(frame, f"Dos: {data.get('back_angle', 0):.2f}", 
                                 (50, 110), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 0, 0), 2)
 
             _, buffer = cv2.imencode(".jpg", frame)
@@ -106,14 +149,14 @@ async def video_feed(websocket: WebSocket):
     finally:
         cap.release()
         print("\n===== Fin du streaming WebSocket =====")
-        print(f"Nombre total de frames collectées : {len(frames_data)}")
+        print(f"Nombre total de frames collectées : {len(current_squat)}")
         print("Aperçu des données collectées :")
-        for i, data in enumerate(frames_data[:5]):
-            print(f"Frame {i+1} : {data}")
+        for i, dataSquat in enumerate(current_squat[:5]):
+            print(f"Frame {i+1} : {dataSquat}")
 
         json_filename = "dataMouv.json"
         with open(json_filename, "w") as f:
-            json.dump(frames_data, f, indent=4)
+            json.dump(current_squat, f, indent=4)
 
         await websocket.close()
         print("✅ WebSocket fermé proprement.\n")
