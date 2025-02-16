@@ -62,8 +62,7 @@ async def video_feed(websocket: WebSocket):
     in_squat = False  # Indicateur si un squat est en cours
     squat_validated = False  # Vérifie qu'on a atteint la position basse
     prev_landmark = None
-    with open("gt.json", "r") as f:
-        gt = json.load(f)
+    gt = {}
     try:    
         while True:
             try:
