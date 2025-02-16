@@ -121,7 +121,7 @@ from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from app.database import engine
 from app import models
-from app.routers import users
+from app.routers import users, items
 from app.routers.video_analysis import extract_squat_data, new_extract_squat_data
 from app.routers.message import llm
 import cv2
@@ -157,7 +157,7 @@ app.add_middleware(
 )
 
 app.include_router(users.router)
-# app.include_router(items.router)
+app.include_router(items.router)
 # app.include_router(video_analysis.router)
 
 @app.get("/api/")
@@ -265,6 +265,42 @@ async def video_feed(websocket: WebSocket):
 #     return {"detail": "Video not found"}
 
 
+# @app.post("/upload/")
+# async def upload_video(
+#     video: UploadFile = File(...),
+#     exercise_name: str = Form(...),
+#     db: Session = Depends(get_db)
+# ):
+#     try:
+#         video_content = await video.read()
+#         print(exercise_name)
+#         new_video = add_video(
+#             db=db,
+#             video_name=exercise_name,
+#             video_data=video_content
+#         )
+#         print("LAA")
+
+#         # return {
+#         #     "video_id": new_video.id,
+#         #     "name": new_video.name
+#         # }
+
+#     except Exception as e:
+#         raise HTTPException(status_code=400, detail=str(e))
+
+# @app.get("/videos/{video_id}")
+# async def get_video(video_id: int, db: Session = Depends(get_db)):
+#     video = db.query(Video).filter(Video.id == video_id).first()
+#     if not video:
+#         raise HTTPException(status_code=404, detail="Video not found")
+    
+#     return StreamingResponse(
+#         io.BytesIO(video.video_data),
+#         media_type="video/mp4"
+#     )
+
+
 @app.post("/upload/")
 async def upload_video(
     video: UploadFile = File(...),
@@ -279,23 +315,21 @@ async def upload_video(
             video_name=exercise_name,
             video_data=video_content
         )
-        print("LAA")
+        print("Video uploaded successfully.")
 
-        # return {
-        #     "video_id": new_video.id,
-        #     "name": new_video.name
-        # }
+        return JSONResponse(content={"video_id": new_video.id, "name": new_video.name}, status_code=200)
 
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
-@app.get("/videos/{video_id}")
-async def get_video(video_id: int, db: Session = Depends(get_db)):
+@app.get("/videos/")
+async def list_videos(db: Session = Depends(get_db)):
+    videos = db.query(Video).all()
+    return videos
+
+@app.get("/videos/{video_id}/download")
+async def download_video(video_id: int, db: Session = Depends(get_db)):
     video = db.query(Video).filter(Video.id == video_id).first()
-    if not video:
-        raise HTTPException(status_code=404, detail="Video not found")
-    
-    return StreamingResponse(
-        io.BytesIO(video.video_data),
-        media_type="video/mp4"
-    )
+    if video:
+        return FileResponse(video.video_data, media_type="video/mp4", filename=f"{video.name}.mp4")
+    return JSONResponse(content={"detail": "Video not found"}, status_code=404)

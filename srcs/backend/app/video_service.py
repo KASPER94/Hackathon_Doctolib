@@ -21,18 +21,20 @@ from app.models import Video
 def add_video(db: Session, video_name: str, video_data: bytes):
     print("LA1A")
     print(video_name)
-    # print(video_data)
+    print(type(video_data), len(video_data))    
     print("LA1A")
-
-    video = Video(
-        id=1,
-        name=video_name,
-        video_data=video_data
-    )
-    print("LA2A")
-    db.add(video)
-    db.commit()
-    print("LA3A")
-    db.refresh(video)
-
-    # return video
+    try:
+        video = Video(
+            name=video_name,
+            video_data=video_data
+        )
+        print("LA2A")
+        db.add(video)
+        db.commit()
+        print("LA3A")
+        db.refresh(video)
+    except Exception as e:
+        db.rollback()
+        print(f"Erreur SQLAlchemy: {e}")  # Affiche l'erreur exacte
+        raise HTTPException(status_code=500, detail=str(e))
+        # return video

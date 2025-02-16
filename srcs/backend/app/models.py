@@ -3,6 +3,10 @@ from sqlalchemy import Column, Integer, String, LargeBinary, DateTime
 
 from sqlalchemy.orm import relationship
 from app.database import Base
+from sqlalchemy import Column, Integer, String, ForeignKey
+from sqlalchemy.orm import relationship
+from app.database import Base  # Assure-toi que Base est bien importé
+
 
 # Modèle pour les utilisateurs
 class User(Base):
@@ -16,15 +20,15 @@ class User(Base):
     items = relationship("Item", back_populates="owner")
 
 # Modèle pour les objets
-# class Item(Base):
-#     __tablename__ = "items"
+class Item(Base):
+    __tablename__ = "items"
 
-#     id = Column(Integer, primary_key=True, index=True)
-#     title = Column(String, index=True)
-#     description = Column(String, nullable=True)
-#     owner_id = Column(Integer, ForeignKey("users.id"))
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, index=True)
+    description = Column(String, nullable=True)
+    owner_id = Column(Integer, ForeignKey("users.id"))
 
-#     owner = relationship("User", back_populates="items")
+    owner = relationship("User", back_populates="items")
 
 # Nouveau modèle pour les vidéos
 class Video(Base):
