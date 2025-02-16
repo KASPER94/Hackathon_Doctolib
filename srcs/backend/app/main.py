@@ -141,7 +141,11 @@ from app.database import get_db
 from app.video_service import add_video
 import io
 from fastapi.responses import StreamingResponse
+from app.database import SessionLocal, init_db
+from fastapi.responses import JSONResponse
 
+
+init_db()
 # Création des tables dans la base de données
 models.Base.metadata.create_all(bind=engine)
 
@@ -228,79 +232,6 @@ async def video_feed(websocket: WebSocket):
         await websocket.close()
         print("✅ WebSocket fermé proprement.\n")
 
-# # # Ajout de l'endpoint pour le téléchargement de fichiers
-# @app.post("/upload/")
-# async def upload_files(video: UploadFile = File(...), document: UploadFile = File(None)):
-#     video_id = str(uuid.uuid4())
-#     video_path = f"uploads/{video_id}.mp4"
-
-#     # Sauvegarde du fichier vidéo
-#     os.makedirs("uploads", exist_ok=True)
-#     with open(video_path, "wb") as f:
-#         f.write(await video.read())
-
-#     if document:
-#         document_path = f"uploads/{video_id}_document.pdf"
-#         with open(document_path, "wb") as f:
-#             f.write(await document.read())
-
-#     return {"message": "Files uploaded successfully", "video_id": video_id}
-
-# # # Endpoint pour lister toutes les vidéos
-# @app.get("/videos/")
-# async def list_videos():
-#     videos = []
-#     for file_name in os.listdir("uploads"):
-#         if file_name.endswith(".mp4"):
-#             video_id = file_name.split(".")[0]
-#             videos.append({"id": video_id, "filename": file_name})
-#     return videos
-
-# # # Endpoint pour télécharger une vidéo
-# @app.get("/videos/{video_id}/download")
-# async def download_video(video_id: str):
-#     video_path = f"uploads/{video_id}.mp4"
-#     if os.path.exists(video_path):
-#         return FileResponse(video_path, media_type="video/mp4", filename=f"{video_id}.mp4")
-#     return {"detail": "Video not found"}
-
-
-# @app.post("/upload/")
-# async def upload_video(
-#     video: UploadFile = File(...),
-#     exercise_name: str = Form(...),
-#     db: Session = Depends(get_db)
-# ):
-#     try:
-#         video_content = await video.read()
-#         print(exercise_name)
-#         new_video = add_video(
-#             db=db,
-#             video_name=exercise_name,
-#             video_data=video_content
-#         )
-#         print("LAA")
-
-#         # return {
-#         #     "video_id": new_video.id,
-#         #     "name": new_video.name
-#         # }
-
-#     except Exception as e:
-#         raise HTTPException(status_code=400, detail=str(e))
-
-# @app.get("/videos/{video_id}")
-# async def get_video(video_id: int, db: Session = Depends(get_db)):
-#     video = db.query(Video).filter(Video.id == video_id).first()
-#     if not video:
-#         raise HTTPException(status_code=404, detail="Video not found")
-    
-#     return StreamingResponse(
-#         io.BytesIO(video.video_data),
-#         media_type="video/mp4"
-#     )
-
-
 @app.post("/upload/")
 async def upload_video(
     video: UploadFile = File(...),
@@ -317,10 +248,10 @@ async def upload_video(
         )
         print("Video uploaded successfully.")
 
-        return JSONResponse(content={"video_id": new_video.id, "name": new_video.name}, status_code=200)
-
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+    return JSONResponse(content={"video_id": new_video.id, "name": new_video.name}, status_code=200)
+        
 
 @app.get("/videos/")
 async def list_videos(db: Session = Depends(get_db)):

@@ -37,7 +37,3 @@ class Video(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)  # Name of the video
     video_data = Column(LargeBinary, nullable=False)  # Storing the video binary data
-    # created_at = Column(DateTime, default=datetime.utcnow)  # Timestamp when the video is created
-    # owner_id = Column(Integer, ForeignKey("users.id"))  # Linking video to a user (if needed)
-
-    # owner = relationship("User", back_populates="videos")  # Relationship with User model

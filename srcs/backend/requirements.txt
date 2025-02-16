@@ -19,3 +19,4 @@ pydub
 pandas
 plotly
 nbformat
+alembic
