@@ -18,7 +18,7 @@ load_dotenv()
 # angles_patient_batch = angles_patient_json_exemple
 
 # PROMPT
-SYSTEM_INSTRUCTIONS = "You are a helpful physiotherapist that talks to a patient."
+SYSTEM_INSTRUCTIONS = "You are a helpful physiotherapist assistant that talks to a patient. Your task is to analyze a patient's squat movement data to provide clear and concise feedback in 10 words or less. If the exercise is well executed, say nothing, or encourage"
 # USER_INSTRUCTIONS = f"""As a physiotherapist, your task is to analyze a patient's movement data to provide clear and concise feedback in 5 words or less. \
 #         The feedback needs to help the patient to correct their movement. You absolutly can't use the word "angles" in your answer and try to be a human as much as possible. \
 #             You will be provided with two JSON datasets:
@@ -61,52 +61,37 @@ async def stream_tts(text, websocket):
     # play(audio)
     # tts_duration = time.time() - tts_start_time
     # print(f"TIME: Text-to-speech: {tts_duration:.2f} seconds.")
-
-def do_instr(frames):
-    print(tmp_frames)
-    USER_INSTRUCTIONS = f"""As a physiotherapist, your task is to analyze a patient's squat movement data to provide clear and concise feedback in 5 words or less. \
-        The feedback needs to help the patient to correct their movement. You absolutly cannot use the word "angles" in your answer and try to be a human as much as possible. \
+ 
+async def llm(frames, gt, websocket, model="gpt-4o"):  # ✅ Ajout d'async
+    USER_INSTRUCTIONS = f"""The feedback needs to help the patient to correct their movement. You absolutly cannot use the word "angles" in your answer and try to be a human as much as possible. \
             You will be provided with a JSON datasets:
-Patient's Angles JSON: Contains the patient's recorded angles for the same body parts during the exercise:
-    {frames}
+      Patient's Angles JSON: Contains the patient's recorded angles for the same body parts during the exercise:
+          {frames}
+      Instructions:
+      Check the angles of patient inside the json file
+      Identify any deviations
+      Provide specific feedback to the patient on how to adjust their posture or movements to achieve the correct angles.
+      """
+    
+    # ✅ Appel OpenAI LLM
+    client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    llm_start = time.time()
+    messages = [
+        {"role": "system", "content": SYSTEM_INSTRUCTIONS},
+        {"role": "user", "content": USER_INSTRUCTIONS},
+    ]
+    response = client.chat.completions.create(
+        model=model,
+        messages=messages,
+    )
+    llm_duration = time.time() - llm_start
 
-Instructions:
-Check the angles of patient inside the json file
-Identify any deviations
-Provide specific feedback to the patient on how to adjust their posture or movements to achieve the correct angles.
-		"""
-    return USER_INSTRUCTIONS
+    answer = response.choices[0].message.content
+    print(f"🧠 Réponse LLM: {answer}")
+    print(f"⏳ Temps de traitement LLM : {llm_duration:.2f} s.")
 
-tmp_frames = []
-
-async def llm(frames, websocket, model="gpt-4o"):  # ✅ Ajout d'async
-    global tmp_frames
-    tmp_frames.append(frames)
-
-    if len(tmp_frames) == 30:
-        USER_INSTRUCTIONS = do_instr(tmp_frames)
-        
-        # ✅ Appel OpenAI LLM
-        client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        llm_start = time.time()
-        response = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": SYSTEM_INSTRUCTIONS},
-                {"role": "user", "content": USER_INSTRUCTIONS},
-            ],
-        )
-        llm_duration = time.time() - llm_start
-
-        answer = response.choices[0].message.content
-        print(f"🧠 Réponse LLM: {answer}")
-        print(f"⏳ Temps de traitement LLM : {llm_duration:.2f} s.")
-
-        # ✅ Correction : Attendre `stream_tts`
-        await stream_tts(answer, websocket)
-
-        # ✅ Réinitialiser les frames
-        tmp_frames.clear()
+    # ✅ Correction : Attendre `stream_tts`
+    await stream_tts(answer, websocket)
     # return answer
 
 # text = llm()
